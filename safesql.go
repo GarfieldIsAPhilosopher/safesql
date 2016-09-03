@@ -38,11 +38,13 @@ func main() {
 	c := loader.Config{
 		FindPackage: FindPackage,
 	}
-	c.Import("database/sql")
+	// c.Import("~/go/src/code.cloudfoundry.org/cli/commands/ui")
 	for _, pkg := range pkgs {
+		fmt.Println("pkg     ", pkg)
 		c.Import(pkg)
 	}
 	p, err := c.Load()
+	// fmt.Printf("%#v\n", p)
 	if err != nil {
 		fmt.Printf("error loading packages %v: %v\n", pkgs, err)
 		os.Exit(2)
@@ -50,7 +52,7 @@ func main() {
 	s := ssautil.CreateProgram(p, 0)
 	s.Build()
 
-	qms := FindQueryMethods(p.Package("database/sql").Pkg, s)
+	qms := FindQueryMethods(p.Package("code.cloudfoundry.org/cli/commands/ui").Pkg, s)
 	if verbose {
 		fmt.Println("database/sql functions that accept queries:")
 		for _, m := range qms {
@@ -122,6 +124,7 @@ func FindQueryMethods(sql *types.Package, ssa *ssa.Program) []*QueryMethod {
 				continue
 			}
 			s := m.Type().(*types.Signature)
+			// fmt.Printf("%#v\n", s)
 			if num, ok := FuncHasQuery(s); ok {
 				methods = append(methods, &QueryMethod{
 					Func:     m,
@@ -143,7 +146,8 @@ func FuncHasQuery(s *types.Signature) (offset int, ok bool) {
 	params := s.Params()
 	for i := 0; i < params.Len(); i++ {
 		v := params.At(i)
-		if v.Name() == "query" && v.Type() == stringType {
+		fmt.Printf("%#v\n", v)
+		if v.Name() == "formattedString" && v.Type() == stringType {
 			return i, true
 		}
 	}
@@ -167,7 +171,7 @@ func FindMains(p *loader.Program, s *ssa.Program) []*ssa.Package {
 // FindNonConstCalls returns the set of callsites of the given set of methods
 // for which the "query" parameter is not a compile-time constant.
 func FindNonConstCalls(cg *callgraph.Graph, qms []*QueryMethod) []ssa.CallInstruction {
-	cg.DeleteSyntheticNodes()
+	// cg.DeleteSyntheticNodes()
 
 	// package database/sql has a couple helper functions which are thin
 	// wrappers around other sensitive functions. Instead of handling the
@@ -183,11 +187,35 @@ func FindNonConstCalls(cg *callgraph.Graph, qms []*QueryMethod) []ssa.CallInstru
 	for _, m := range qms {
 		node := cg.CreateNode(m.SSA)
 		for _, edge := range node.In {
-			if _, ok := okFuncs[edge.Site.Parent()]; ok {
-				continue
-			}
+			fmt.Printf("%#v\n", edge)
+			fmt.Printf("%#v\n", edge.Caller)
+			fmt.Printf("%#v\n", edge.Callee)
+			// if _, ok := okFuncs[edge.Site.Parent()]; ok {
+			// 	continue
+			// }
 			cc := edge.Site.Common()
 			args := cc.Args
+
+			// fmt.Printf("%#v\n", args)
+			for _, arg := range args {
+				if arg2, ok := arg.(*ssa.Parameter); ok {
+
+					fmt.Printf("arg2 %#v\n", arg2)
+					// if arg2.Object().Type() == "[]map[string]interface{}" {
+					// 	fmt.Printf("%#v\n", arg2.Object())
+					// 	// for objkey,objvalue:=range obj{
+					// 	// 	fmt.Printf("key value:%#v\n",objkey,objvalue)
+					// 	// }
+					// }
+					fmt.Printf("name:%s,  string:%s, type:%s\n", arg2.Object().Name(), arg2.Object().String(), arg2.Object().Pos())
+					if arg2.Object().Type().String() == "string" {
+						fmt.Printf("here  %#v\n", arg2.Object())
+					}
+
+				}
+				// fmt.Printf("arg %#v\n", arg)
+				// fmt.Printf("%#v\n", arg)
+			}
 			// The first parameter is occasionally the receiver.
 			if len(args) == m.ArgCount+1 {
 				args = args[1:]
